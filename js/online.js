@@ -29,6 +29,7 @@ $(document).ready(function() {
   var inputEditor = CodeMirror.fromTextArea($("#input").get(0), {
       lineNumbers: true,
       gutters: ["CodeMirror-lint-markers"],
+      lineWrapping: true,
   });
 
   function buildSizeAndTimeInfoHtml(title, size, time) {
