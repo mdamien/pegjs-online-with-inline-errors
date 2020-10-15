@@ -1,4 +1,11 @@
 $(document).ready(function() {
+
+  var lintError = null;
+  CodeMirror.registerHelper("lint", "pegjs", function(text) {
+    var found = [lintError];
+    return found;
+  });
+
   var KB      = 1024;
   var MS_IN_S = 1000;
 
@@ -16,7 +23,8 @@ $(document).ready(function() {
 
   var editor = CodeMirror.fromTextArea($("#grammar").get(0), {
       lineNumbers: true,
-      mode: "pegjs"
+      mode: "pegjs",
+      gutters: ["CodeMirror-lint-markers"],
   });
 
   function buildSizeAndTimeInfoHtml(title, size, time) {
@@ -35,7 +43,14 @@ $(document).ready(function() {
       : e.message;
   }
 
+  function buildErrorMessageForParsing(e) {
+    return e.location !== undefined
+      ? "Line <" + e.location.start.line + ">, column " + e.location.start.column + ": " + e.message
+      : e.message;
+  }
+
   function build() {
+    editor.setOption("lint",false);
     oldGrammar        = getGrammar();
     oldParserVar      = $("#parser-var").val();
     oldOptionCache    = $("#option-cache").is(":checked");
@@ -77,6 +92,12 @@ $(document).ready(function() {
 
       var result = true;
     } catch (e) {
+      lintError = {
+        from: CodeMirror.Pos(e.location.start.line - 1, e.location.start.column - 1),
+        to: CodeMirror.Pos(e.location.end.line - 1, e.location.end.column - 1),
+        message: e.message
+      };
+      editor.setOption("lint",true);
       $("#build-message").attr("class", "message error").text(buildErrorMessage(e));
 
       var result = false;
@@ -110,7 +131,7 @@ $(document).ready(function() {
 
       var result = true;
     } catch (e) {
-      $("#parse-message").attr("class", "message error").text(buildErrorMessage(e));
+      $("#parse-message").attr("class", "message error").html(buildErrorMessageForParsing(e));
 
       var result = false;
     }
@@ -182,15 +203,6 @@ $(document).ready(function() {
 
   editor.on("change", scheduleBuildAndParse);
 
-  $("#parser-var, #option-cache, #option-optimize")
-    .change(scheduleBuildAndParse)
-    .mousedown(scheduleBuildAndParse)
-    .mouseup(scheduleBuildAndParse)
-    .click(scheduleBuildAndParse)
-    .keydown(scheduleBuildAndParse)
-    .keyup(scheduleBuildAndParse)
-    .keypress(scheduleBuildAndParse);
-
   $("#input")
     .change(scheduleParse)
     .mousedown(scheduleParse)
@@ -199,14 +211,6 @@ $(document).ready(function() {
     .keydown(scheduleParse)
     .keyup(scheduleParse)
     .keypress(scheduleParse);
-
-  $( "#parser-download" )
-    .click(function(){
-
-      var blob = new Blob( [ $( "#parser-var" ).val() + " = " + parserSource + ";\n" ], { type: "application/javascript" } );
-      window.saveAs( blob, "parser.js" );
-
-    });
 
   doLayout();
   $(window).resize(doLayout);
