@@ -1,5 +1,4 @@
 $(document).ready(function() {
-
   var lintError = null;
   CodeMirror.registerHelper("lint", "pegjs", function(text) {
     var found = [lintError];
@@ -27,6 +26,11 @@ $(document).ready(function() {
       gutters: ["CodeMirror-lint-markers"],
   });
 
+  var inputEditor = CodeMirror.fromTextArea($("#input").get(0), {
+      lineNumbers: true,
+      gutters: ["CodeMirror-lint-markers"],
+  });
+
   function buildSizeAndTimeInfoHtml(title, size, time) {
     return $("<span/>", {
       "class": "size-and-time",
@@ -40,12 +44,6 @@ $(document).ready(function() {
   function buildErrorMessage(e) {
     return e.location !== undefined
       ? "Line " + e.location.start.line + ", column " + e.location.start.column + ": " + e.message
-      : e.message;
-  }
-
-  function buildErrorMessageForParsing(e) {
-    return e.location !== undefined
-      ? "Line <" + e.location.start.line + ">, column " + e.location.start.column + ": " + e.message
       : e.message;
   }
 
@@ -108,7 +106,8 @@ $(document).ready(function() {
   }
 
   function parse() {
-    oldInput = $("#input").val();
+    inputEditor.setOption("lint", false);
+    oldInput = inputEditor.getValue();
 
     $("#input").removeAttr("disabled");
     $("#parse-message").attr("class", "message progress").text("Parsing the input...");
@@ -116,7 +115,7 @@ $(document).ready(function() {
 
     try {
       var timeBefore = (new Date).getTime();
-      var output = parser.parse($("#input").val());
+      var output = parser.parse(inputEditor.getValue());
       var timeAfter = (new Date).getTime();
 
       $("#parse-message")
@@ -131,8 +130,15 @@ $(document).ready(function() {
 
       var result = true;
     } catch (e) {
-      $("#parse-message").attr("class", "message error").html(buildErrorMessageForParsing(e));
-
+      inputLintError = {
+        from: CodeMirror.Pos(e.location.start.line - 1, e.location.start.column - 1),
+        to: CodeMirror.Pos(e.location.end.line - 1, e.location.end.column - 1),
+        message: e.message
+      };
+      inputEditor.setOption("lint", {
+        getAnnotations: function() { return [inputLintError]},
+      });
+      $("#parse-message").attr("class", "message error").text(buildErrorMessage(e));
       var result = false;
     }
 
@@ -167,7 +173,7 @@ $(document).ready(function() {
   }
 
   function scheduleParse() {
-    if ($("#input").val() === oldInput) { return; }
+    if (inputEditor.getValue() === oldInput) { return; }
     if (buildAndParseTimer !== null) { return; }
 
     if (parseTimer !== null) {
@@ -188,13 +194,14 @@ $(document).ready(function() {
      */
     $("#left-column").height("0px");    // needed for IE
     $("#right-column").height("0px");   // needed for IE
-    $(".CodeMirror").height("0px");
+    $("#left-column .CodeMirror").height("0px");
+    $("#right-column .CodeMirror").height("0px");
     $("#input").height("0px");
 
     $("#left-column").height(($("#left-column").parent().innerHeight() - 2) + "px");     // needed for IE
     $("#right-column").height(($("#right-column").parent().innerHeight() - 2) + "px");   // needed for IE
-    $(".CodeMirror").height(($(".CodeMirror").parent().parent().innerHeight() - 14) + "px");
-    $("#input").height(($("#input").parent().parent().innerHeight() - 14) + "px");
+    $("#left-column .CodeMirror").height(($("#left-column .CodeMirror").parent().parent().innerHeight() - 14) + "px");
+    $("#right-column .CodeMirror").height(($("#right-column .CodeMirror").parent().parent().innerHeight() - 14) + "px");
   }
 
   function getGrammar() {
@@ -203,14 +210,7 @@ $(document).ready(function() {
 
   editor.on("change", scheduleBuildAndParse);
 
-  $("#input")
-    .change(scheduleParse)
-    .mousedown(scheduleParse)
-    .mouseup(scheduleParse)
-    .click(scheduleParse)
-    .keydown(scheduleParse)
-    .keyup(scheduleParse)
-    .keypress(scheduleParse);
+  inputEditor.on("change", scheduleParse)
 
   doLayout();
   $(window).resize(doLayout);
@@ -224,4 +224,5 @@ $(document).ready(function() {
 
   editor.refresh();
   editor.focus();
+  inputEditor.refresh();
 });
